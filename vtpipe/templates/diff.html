@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}版本对比{% endblock %}
+{% block head %}
+<link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<style>
+  .maps { display:flex; gap:10px; } .maps > div { flex:1; }
+  .maps .map { height:480px; }
+  .maplabel { text-align:center; font-weight:bold; padding:4px; }
+</style>
+{% endblock %}
+{% block body %}
+<h1>版本对比</h1>
+<div class="card">
+  <label>图层</label>
+  <select id="layerSel">{% for l in layers.values() %}
+    <option value="{{ l.id }}" data-versions="{{ l.versions|join(',') }}"
+      {% if l.id == layer_id %}selected{% endif %}>{{ l.name }} ({{ l.id }})</option>{% endfor %}
+  </select>
+  <label style="min-width:50px">旧版</label><select id="v1Sel"></select>
+  <label style="min-width:50px">新版</label><select id="v2Sel"></select>
+  <button id="diffBtn">对比</button>
+  <span id="summary" class="muted"></span>
+</div>
+<div class="maps">
+  <div><div class="maplabel" id="label1"></div><div id="map1" class="map"></div></div>
+  <div><div class="maplabel" id="label2"></div><div id="map2" class="map"></div></div>
+</div>
+<h2>变化瓦片</h2>
+<div id="tileList" class="card" style="max-height:260px;overflow:auto"></div>
+<script>
+const LAYERS = {{ layers|tojson }};
+const layerSel = document.getElementById('layerSel');
+const v1Sel = document.getElementById('v1Sel'), v2Sel = document.getElementById('v2Sel');
+
+function fillVers() {
+  const vs = LAYERS[layerSel.value]?.versions || [];
+  v1Sel.innerHTML = vs.map(v => `<option>${v}</option>`).join('');
+  v2Sel.innerHTML = vs.map(v => `<option ${v === Math.max(...vs) ? 'selected' : ''}>${v}</option>`).join('');
+}
+fillVers(); layerSel.onchange = () => { fillVers(); reloadMaps(); };
+
+function mkMap(container) {
+  const m = new maplibregl.Map({container,
+    style: {version: 8, sources: {}, layers: [{id: 'bg', type: 'background',
+      paint: {'background-color': '#e8eef4'}}]},
+    center: [114.0, 30.5], zoom: 10});
+  m.addControl(new maplibregl.NavigationControl());
+  return m;
+}
+const map1 = mkMap('map1'), map2 = mkMap('map2');
+// 双图联动
+let syncing = false;
+for (const [a, b] of [[map1, map2], [map2, map1]]) {
+  a.on('move', () => { if (!syncing) { syncing = true;
+    b.jumpTo({center: a.getCenter(), zoom: a.getZoom(), bearing: a.getBearing()});
+    syncing = false; } });
+}
+
+function setVersion(m, lid, v) {
+  const geom = LAYERS[lid]?.geom_type || 'Polygon';
+  if (m.getLayer('data')) m.removeLayer('data');
+  if (m.getSource('vt')) m.removeSource('vt');
+  m.addSource('vt', {type: 'vector', tiles: [`/tiles/${lid}/${v}/{z}/{x}/{y}.pbf`],
+    minzoom: 0, maxzoom: 22});
+  const spec = {
+    Polygon: {type: 'fill', paint: {'fill-color': '#088', 'fill-opacity': 0.5,
+      'fill-outline-color': '#055'}},
+    LineString: {type: 'line', paint: {'line-color': '#d6336c', 'line-width': 2}},
+    Point: {type: 'circle', paint: {'circle-radius': 4, 'circle-color': '#d6336c'}},
+  }[geom];
+  m.addLayer({id: 'data', source: 'vt', 'source-layer': lid, ...spec});
+}
+function reloadMaps() {
+  const lid = layerSel.value;
+  const doIt = () => { setVersion(map1, lid, v1Sel.value); setVersion(map2, lid, v2Sel.value);
+    document.getElementById('label1').textContent = 'v' + v1Sel.value;
+    document.getElementById('label2').textContent = 'v' + v2Sel.value; };
+  if (!map1.loaded()) { map1.on('load', doIt); } else doIt();
+}
+reloadMaps(); v1Sel.onchange = reloadMaps; v2Sel.onchange = reloadMaps;
+
+function tileCenter(key) {
+  const [z, x, y] = key.split('/').map(Number);
+  const n = 2 ** z;
+  const lon = (x + 0.5) / n * 360 - 180;
+  const latR = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / n)));
+  return [lon, latR * 180 / Math.PI, z];
+}
+
+document.getElementById('diffBtn').onclick = async () => {
+  const url = `/api/diff?layer=${layerSel.value}&v1=${v1Sel.value}&v2=${v2Sel.value}`;
+  const d = await (await fetch(url)).json();
+  document.getElementById('summary').textContent =
+    ` v${d.v1}: ${d.tiles_v1} 块 → v${d.v2}: ${d.tiles_v2} 块 ·` +
+    ` 变化 ${d.n_changed} · 新增 ${d.n_added} · 删除 ${d.n_removed}`;
+  const rows = [];
+  for (const c of d.changed) rows.push(
+    `<tr><td><a href="#" data-t="${c.tile}">${c.tile}</a></td><td>变化</td>` +
+    `<td>${c.features_before} → ${c.features_after} 要素</td>` +
+    `<td>${(c.size_before/1024).toFixed(0)}KB → ${(c.size_after/1024).toFixed(0)}KB</td></tr>`);
+  for (const t of d.added) rows.push(
+    `<tr><td><a href="#" data-t="${t}">${t}</a></td><td class="ok">新增</td><td></td><td></td></tr>`);
+  for (const t of d.removed) rows.push(
+    `<tr><td><a href="#" data-t="${t}">${t}</a></td><td class="err">删除</td><td></td><td></td></tr>`);
+  document.getElementById('tileList').innerHTML = rows.length
+    ? '<table><tr><th>瓦片</th><th>类型</th><th>要素数</th><th>大小</th></tr>' + rows.join('') + '</table>'
+    : '<span class="ok">两个版本完全一致</span>';
+  document.getElementById('tileList').querySelectorAll('a').forEach(a => {
+    a.onclick = (e) => { e.preventDefault();
+      const [lon, lat, z] = tileCenter(a.dataset.t);
+      map1.flyTo({center: [lon, lat], zoom: z}); };
+  });
+};
+</script>
+{% endblock %}

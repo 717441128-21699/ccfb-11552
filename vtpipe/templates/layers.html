@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}图层登记{% endblock %}
+{% block body %}
+<h1>图层登记</h1>
+<form class="card" method="post" action="/api/layers/register">
+  <h2>登记新图层</h2>
+  <p><label>图层 ID</label><input name="id" required placeholder="parcels"> <span class="muted">英文,作为 MVT source-layer 名</span></p>
+  <p><label>名称</label><input name="name" placeholder="宗地"></p>
+  <p><label>数据路径</label><input name="path" required size="50" placeholder="D:\data\parcels.shp 或 .geojson"></p>
+  <p><label>格式</label>
+    <select name="format"><option value="">自动识别</option><option>shp</option><option>geojson</option></select>
+    <label style="min-width:70px">坐标系</label>
+    <select name="crs">
+      <option value="">自动(.prj / WGS84)</option>
+      <option>CGCS2000</option><option>CGCS2000_3GK_114</option>
+      <option>XIAN80</option><option>XIAN80_GK_114</option>
+      <option>WGS84</option><option>WEB_MERCATOR</option>
+    </select>
+    <label style="min-width:70px">几何类型</label>
+    <select name="geom_type"><option>Polygon</option><option>LineString</option><option>Point</option></select>
+  </p>
+  <p><label>小图斑策略</label>
+    <select name="merge_small"><option value="">丢弃</option><option value="1">合并进邻接图斑</option></select>
+    <span class="muted">低级别下面积不足的面的处理方式</span></p>
+  <p><button type="submit">登记</button></p>
+</form>
+
+<h2>已登记图层</h2>
+<table>
+  <tr><th>ID</th><th>名称</th><th>格式</th><th>坐标系</th><th>要素数</th><th>属性字段</th><th>瓦片版本</th></tr>
+  {% for l in layers.values() %}
+  <tr>
+    <td><code>{{ l.id }}</code></td><td>{{ l.name }}</td><td>{{ l.format }}</td>
+    <td>{{ l.crs or "自动" }}</td><td>{{ "{:,}".format(l.feature_count) }}</td>
+    <td class="muted">{{ l.attr_keys|join(", ") }}</td>
+    <td>{% for v in l.versions %}<a href="/preview?layer={{ l.id }}&version={{ v }}">v{{ v }}</a> {% endfor %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}样式检查{% endblock %}
+{% block body %}
+<h1>样式检查</h1>
+<div class="card">
+  <p><label>目标图层</label>
+    <select id="layerSel">{% for l in layers.values() %}
+      <option value="{{ l.id }}" {% if l.id == layer_id %}selected{% endif %}>{{ l.name }} ({{ l.id }})</option>{% endfor %}
+    </select>
+    <span class="muted">检查 style 里引用的 source-layer、属性名是否和图层登记信息一致</span></p>
+  <textarea id="styleJson" style="width:100%;height:320px;font-family:Consolas,monospace"></textarea>
+  <p><button id="checkBtn">检查</button></p>
+  <div id="result"></div>
+</div>
+<script>
+const LAYERS = {{ layers|tojson }};
+const layerSel = document.getElementById('layerSel');
+
+function defaultStyle(lid) {
+  return JSON.stringify({
+    version: 8,
+    sources: {vt: {type: 'vector', tiles: [`/tiles/${lid}/1/{z}/{x}/{y}.pbf`]}},
+    layers: [
+      {id: 'bg', type: 'background', paint: {'background-color': '#eee'}},
+      {id: 'data', type: 'fill', source: 'vt', 'source-layer': lid,
+       paint: {'fill-color': ['match', ['get', 'land_use'],
+         'R', '#e8c872', 'C', '#c98a8a', '#88a888'], 'fill-opacity': 0.6}},
+    ],
+  }, null, 2);
+}
+const ta = document.getElementById('styleJson');
+ta.value = defaultStyle(layerSel.value);
+layerSel.onchange = () => ta.value = defaultStyle(layerSel.value);
+
+document.getElementById('checkBtn').onclick = async () => {
+  const fd = new FormData();
+  fd.append('layer', layerSel.value);
+  fd.append('style', ta.value);
+  const j = await (await fetch('/api/style/check', {method: 'POST', body: fd})).json();
+  document.getElementById('result').innerHTML = j.issues.map(i =>
+    j.ok ? `<p class="ok">✔ ${i}</p>` : `<p class="err">✘ ${i}</p>`).join('');
+};
+</script>
+{% endblock %}

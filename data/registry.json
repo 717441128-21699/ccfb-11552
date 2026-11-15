@@ -1,0 +1,94 @@
+{
+  "layers": {
+    "parcels": {
+      "id": "parcels",
+      "name": "宗地",
+      "path": "D:\\codex\\runs\\11552\\workspace\\data\\source\\parcels.shp",
+      "format": "shp",
+      "crs": "CGCS2000",
+      "geom_type": "Polygon",
+      "feature_count": 200704,
+      "bbox3857": [
+        12685163.950433187,
+        3562725.4559358195,
+        12685337.950433187,
+        3568727.4559358205
+      ],
+      "attr_keys": [
+        "area",
+        "district",
+        "floor",
+        "land_use",
+        "parcel_id"
+      ],
+      "merge_small": false,
+      "versions": []
+    },
+    "zones": {
+      "id": "zones",
+      "name": "控规单元",
+      "path": "D:\\codex\\runs\\11552\\workspace\\data\\source\\zones.shp",
+      "format": "shp",
+      "crs": "CGCS2000",
+      "geom_type": "Polygon",
+      "feature_count": 196,
+      "bbox3857": [
+        12685157.950433187,
+        3562719.4559358205,
+        12695685.950433185,
+        3573247.455935822
+      ],
+      "attr_keys": [
+        "far",
+        "name",
+        "zone_code"
+      ],
+      "merge_small": false,
+      "versions": []
+    },
+    "roads": {
+      "id": "roads",
+      "name": "道路",
+      "path": "D:\\codex\\runs\\11552\\workspace\\data\\source\\roads.geojson",
+      "format": "geojson",
+      "crs": "XIAN80_GK_114",
+      "geom_type": "LineString",
+      "feature_count": 114,
+      "bbox3857": [
+        12685151.950433187,
+        3562719.455935819,
+        12695685.950433185,
+        12695679.950433183
+      ],
+      "attr_keys": [
+        "level",
+        "name",
+        "road_id"
+      ],
+      "merge_small": false,
+      "versions": []
+    },
+    "pipelines": {
+      "id": "pipelines",
+      "name": "管线",
+      "path": "D:\\codex\\runs\\11552\\workspace\\data\\source\\pipelines.geojson",
+      "format": "geojson",
+      "crs": "CGCS2000",
+      "geom_type": "LineString",
+      "feature_count": 15,
+      "bbox3857": [
+        12685154.950433187,
+        3562719.4559358205,
+        12696182.950433185,
+        3573247.455935822
+      ],
+      "attr_keys": [
+        "diameter",
+        "material",
+        "pipe_id"
+      ],
+      "merge_small": false,
+      "versions": []
+    }
+  }
+}

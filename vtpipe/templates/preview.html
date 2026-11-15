@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}瓦片预览{% endblock %}
+{% block head %}
+<link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+{% endblock %}
+{% block body %}
+<h1>瓦片预览</h1>
+<div class="card">
+  <label>图层</label>
+  <select id="layerSel">{% for l in layers.values() %}
+    <option value="{{ l.id }}" data-geom="{{ l.geom_type }}" {% if l.id == layer_id %}selected{% endif %}
+      data-versions="{{ l.versions|join(',') }}">{{ l.name }} ({{ l.id }})</option>{% endfor %}
+  </select>
+  <label style="min-width:50px">版本</label><select id="verSel"></select>
+  <span class="muted" id="tileInfo">移动鼠标查看瓦片坐标</span>
+</div>
+<div id="map" class="map"></div>
+<script>
+const layerSel = document.getElementById('layerSel');
+const verSel = document.getElementById('verSel');
+const LAYERS = {{ layers|tojson }};
+
+function fillVersions() {
+  const vs = (LAYERS[layerSel.value]?.versions || [1]);
+  verSel.innerHTML = vs.map(v => `<option ${v == {{ version }} ? 'selected' : ''}>${v}</option>`).join('');
+}
+fillVersions();
+layerSel.onchange = () => { fillVersions(); reload(); };
+verSel.onchange = reload;
+
+const map = new maplibregl.Map({
+  container: 'map',
+  style: {version: 8, sources: {}, layers: [{id: 'bg', type: 'background',
+    paint: {'background-color': '#e8eef4'}}]},
+  center: [114.0, 30.5], zoom: 10,
+});
+map.addControl(new maplibregl.NavigationControl());
+map.addControl(new maplibregl.ScaleControl());
+
+function reload() {
+  const lid = layerSel.value, v = verSel.value;
+  const geom = LAYERS[lid]?.geom_type || 'Polygon';
+  if (map.getLayer('data')) map.removeLayer('data');
+  if (map.getSource('vt')) map.removeSource('vt');
+  map.addSource('vt', {type: 'vector',
+    tiles: [`/tiles/${lid}/${v}/{z}/{x}/{y}.pbf`], minzoom: 0, maxzoom: 22});
+  const spec = {
+    Polygon: {type: 'fill', paint: {'fill-color': '#088', 'fill-opacity': 0.5,
+      'fill-outline-color': '#055'}},
+    LineString: {type: 'line', paint: {'line-color': '#d6336c', 'line-width': 2}},
+    Point: {type: 'circle', paint: {'circle-radius': 4, 'circle-color': '#d6336c'}},
+  }[geom];
+  map.addLayer({id: 'data', source: 'vt', 'source-layer': lid, ...spec});
+}
+map.on('load', reload);
+
+map.on('mousemove', (e) => {
+  const z = Math.floor(map.getZoom());
+  const n = 2 ** z;
+  const x = Math.floor((e.lngLat.lng + 180) / 360 * n);
+  const lat = e.lngLat.lat * Math.PI / 180;
+  const y = Math.floor((1 - Math.log(Math.tan(lat) + 1 / Math.cos(lat)) / Math.PI) / 2 * n);
+  document.getElementById('tileInfo').textContent =
+    `zoom ${map.getZoom().toFixed(1)} · 瓦片 ${z}/${x}/${y}`;
+});
+map.on('click', (e) => {
+  const fs = map.queryRenderedFeatures(e.point, {layers: ['data']});
+  if (fs.length) new maplibregl.Popup().setLngLat(e.lngLat)
+    .setHTML('<pre>' + JSON.stringify(fs[0].properties, null, 2) + '</pre>').addTo(map);
+});
+</script>
+{% endblock %}

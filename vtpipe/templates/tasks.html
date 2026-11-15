@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}切片任务{% endblock %}
+{% block body %}
+<h1>切片任务</h1>
+<form class="card" id="taskForm">
+  <h2>新建任务</h2>
+  <p><label>图层</label>
+    <select name="layer">{% for l in layers.values() %}<option value="{{ l.id }}">{{ l.name }} ({{ l.id }})</option>{% endfor %}</select>
+    <label style="min-width:70px">级别</label>
+    <input name="zmin" type="number" value="10" min="0" max="22" style="width:60px"> —
+    <input name="zmax" type="number" value="18" min="0" max="22" style="width:60px">
+    <label style="min-width:70px">模式</label>
+    <select name="mode" id="modeSel">
+      <option value="full">全量(新版本)</option>
+      <option value="incremental">增量(只重切受影响瓦片)</option>
+    </select>
+  </p>
+  <p id="bboxRow" style="display:none">
+    <label>变化范围</label>
+    <input name="bbox" size="40" placeholder="minLon,minLat,maxLon,maxLat">
+    <span class="muted">经纬度,只重切与该范围相交的瓦片(自动外扩缓冲)</span>
+  </p>
+  <p><button type="submit">启动切片</button> <span id="startMsg" class="muted"></span></p>
+</form>
+
+<h2>任务列表</h2>
+<table id="taskTable">
+  <tr><th>ID</th><th>图层</th><th>级别</th><th>模式</th><th>状态</th><th>进度</th><th>结果 / 告警</th></tr>
+</table>
+
+<script>
+const modeSel = document.getElementById('modeSel');
+modeSel.onchange = () => document.getElementById('bboxRow').style.display =
+  modeSel.value === 'incremental' ? '' : 'none';
+
+document.getElementById('taskForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const r = await fetch('/api/tasks/start', {method:'POST', body:new FormData(e.target)});
+  const j = await r.json();
+  document.getElementById('startMsg').textContent = '已启动 ' + j.task_id;
+  refresh();
+};
+
+async function refresh() {
+  const tasks = await (await fetch('/api/tasks')).json();
+  const tb = document.getElementById('taskTable');
+  tb.innerHTML = '<tr><th>ID</th><th>图层</th><th>级别</th><th>模式</th><th>状态</th><th>进度</th><th>结果 / 告警</th></tr>';
+  for (const t of tasks) {
+    let result = '';
+    if (t.status === 'done' && t.result) {
+      result = `v${t.version} · ${t.result.tiles} 块 · ${t.result.seconds}s`;
+      if (t.result.alerts && t.result.alerts.length) {
+        result += `<br><span class="warn">⚠ ${t.result.alerts.length} 条超限告警:</span><br>` +
+          t.result.alerts.slice(0, 10).map(a =>
+            `<span class="warn">${a.tile} ${a.action}</span>`).join('<br>');
+      }
+    } else if (t.status === 'failed') {
+      result = `<span class="err">${t.error}</span>`;
+    }
+    const status = t.status === 'done' ? '<span class="ok">完成</span>'
+      : t.status === 'failed' ? '<span class="err">失败</span>' : '运行中';
+    const progress = t.status === 'running'
+      ? `z${t.z ?? '-'} · 已写 ${t.done} 块` + (t.affected ? ` · 受影响 ${t.affected} 块` : '') : '';
+    tb.insertAdjacentHTML('beforeend',
+      `<tr><td>${t.id}</td><td>${t.layer}</td><td>${t.zmin}-${t.zmax}</td><td>${t.mode}</td>` +
+      `<td>${status}</td><td>${progress}</td><td>${result}</td></tr>`);
+  }
+}
+refresh();
+setInterval(refresh, 2000);
+</script>
+{% endblock %}

@@ -1,0 +1,6 @@
+shapely>=2.0
+pyproj>=3.5
+pyshp>=2.3
+flask>=3.0
+mapbox-vector-tile>=2.0
+numpy>=1.26
